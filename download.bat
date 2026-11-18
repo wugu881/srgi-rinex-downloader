@@ -25,23 +25,36 @@ goto END
 
 :PAGE
 echo.
-set /p VAL=页码范围，例如 17-24:
+set /p VAL=页码范围（数字，例如 17-24）:
 set "SEL=--pages"
-goto ASK
+goto ASK_YEAR
 
 :STAT
 echo.
-set /p VAL=站号范围，例如 crjs-csbl:
+set /p VAL=站号范围（4 位站号，例如 crjs-csbl）:
 set "SEL=--stations"
 
-:ASK
+:ASK_YEAR
 echo.
-set /p Y=年份，直接回车 = 2026:
-if "%Y%"=="" set "Y=2026"
-set /p D=年积日范围，例如 212-320:
-set /p M=下载方式 1=先检查再下载（准确） 2=直接下载（快），回车 = 2:
+set /p Y=年份（4 位数字，例如 2026）:
+if "%Y%"=="" (
+  echo 年份不能为空，请重新输入
+  goto ASK_YEAR
+)
+
+:ASK_DOY
+echo.
+set /p D=年积日范围（3 位年积日，例如 001-100）:
+if "%D%"=="" (
+  echo 年积日不能为空，请重新输入
+  goto ASK_DOY
+)
+
+echo.
+set /p M=下载方式（1 或 2，回车 = 2）:
 if "%M%"=="" set "M=2"
-set /p O=保存目录，直接回车 = 本目录下的 output:
+
+set /p O=保存目录（回车 = 本目录下的 output）:
 if "%O%"=="" set "O=%~dp0output"
 
 set "FLAG="
