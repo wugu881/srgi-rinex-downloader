@@ -1,0 +1,23 @@
+# session & browser profile
+session.json
+chrome_profile/
+browser/
+
+# downloaded data
+output/
+data/
+*.zip
+*.26o
+*.26n
+*.26d.gz
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# editors / os
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
