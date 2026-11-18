@@ -1,50 +1,63 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
+
+set "PY=python"
 where python >nul 2>nul
+if errorlevel 1 set "PY=py -3"
+%PY% -c "import sys" >nul 2>nul
 if errorlevel 1 (
-  echo æ²¡æœ‰æ‰¾åˆ° pythonï¼Œè¯·å…ˆå®‰è£… Python 3.8 æˆ–æ›´é«˜ç‰ˆæœ¬ï¼ˆå®‰è£…æ—¶å‹¾é€‰ Add Python to PATHï¼‰
+  echo Ã»ÓĞÕÒµ½ Python£¬ÇëÏÈ°²×° Python 3.8 »ò¸ü¸ß°æ±¾£¨°²×°Ê±¹´Ñ¡ Add Python to PATH£©
   pause
-  exit /b
+  exit /b 1
 )
+
 echo ============================================
-echo    SRGI RINEX ä¸‹è½½å·¥å…·
+echo    SRGI RINEX ÏÂÔØ¹¤¾ß
 echo ============================================
-echo   1 = æŒ‰é¡µç é€‰ç«™ï¼ˆæ¯é¡µ 20 ä¸ªï¼‰
-echo   2 = æŒ‰ç«™å·èŒƒå›´é€‰ç«™
+echo    1 = °´Ò³ÂëÑ¡Õ¾£¨Ã¿Ò³ 20 ¸öÕ¾£©
+echo    2 = °´Õ¾ºÅ·¶Î§Ñ¡Õ¾
 echo.
-set /p MODE=è¯·é€‰æ‹© 1 æˆ– 2:
+set /p MODE=ÇëÑ¡Ôñ 1 »ò 2:
 if "%MODE%"=="1" goto PAGE
 if "%MODE%"=="2" goto STAT
 goto END
 
 :PAGE
-set /p VAL=é¡µç èŒƒå›´ï¼ˆä¾‹å¦‚ 17-24ï¼‰:
-set SEL=--pages
-goto ASK_YEAR
+echo.
+set /p VAL=Ò³Âë·¶Î§£¬ÀıÈç 17-24:
+set "SEL=--pages"
+goto ASK
 
 :STAT
-set /p VAL=ç«™å·èŒƒå›´ï¼ˆä¾‹å¦‚ crjs-csblï¼‰:
-set SEL=--stations
-
-:ASK_YEAR
 echo.
-set /p Y=å¹´ä»½ï¼ˆç›´æ¥å›è½¦ = 2026ï¼‰:
-if "%Y%"=="" set Y=2026
-set /p D=å¹´ç§¯æ—¥èŒƒå›´ï¼ˆä¾‹å¦‚ 212-320ï¼‰:
-set /p O=ä¿å­˜ç›®å½•ï¼ˆç›´æ¥å›è½¦ = æœ¬ç›®å½•ä¸‹çš„ outputï¼‰:
-if "%O%"=="" set O=%~dp0output
+set /p VAL=Õ¾ºÅ·¶Î§£¬ÀıÈç crjs-csbl:
+set "SEL=--stations"
+
+:ASK
+echo.
+set /p Y=Äê·İ£¬Ö±½Ó»Ø³µ = 2026:
+if "%Y%"=="" set "Y=2026"
+set /p D=Äê»ıÈÕ·¶Î§£¬ÀıÈç 212-320:
+set /p M=ÏÂÔØ·½Ê½ 1=ÏÈ¼ì²éÔÙÏÂÔØ£¨×¼È·£© 2=Ö±½ÓÏÂÔØ£¨¿ì£©£¬»Ø³µ = 2:
+if "%M%"=="" set "M=2"
+set /p O=±£´æÄ¿Â¼£¬Ö±½Ó»Ø³µ = ±¾Ä¿Â¼ÏÂµÄ output:
+if "%O%"=="" set "O=%~dp0output"
+
+set "FLAG="
+if "%M%"=="2" set "FLAG=--no-check"
 
 echo.
-echo å³å°†æ‰§è¡Œ:
-echo   python srgi_tool.py run %SEL% %VAL% --year %Y% --doy %D% --out "%O%"
+echo ¼´½«Ö´ĞĞ:
+echo   %PY% srgi_tool.py run %FLAG% %SEL% %VAL% --year %Y% --doy %D% --out "%O%"
 echo.
 pause
-python srgi_tool.py run %SEL% %VAL% --year %Y% --doy %D% --out "%O%"
+
+%PY% srgi_tool.py run %FLAG% %SEL% %VAL% --year %Y% --doy %D% --out "%O%"
 
 echo.
-echo å®Œæˆã€‚æŠ¥å‘Š: %O%\report.csv
-echo æƒ³è¡¥ä¸‹ç¼ºå¤±çš„æ•°æ®: python srgi_tool.py run --retry "%O%\report.csv" --out "%O%"
+echo Íê³É¡£±¨¸æ: %O%\report.csv
+echo ²¹ÏÂÈ±Ê§Êı¾İ: %PY% srgi_tool.py run --retry "%O%\report.csv" --out "%O%"
 pause
 goto :eof
 

@@ -1,14 +1,19 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
+
+set "PY=python"
 where python >nul 2>nul
+if errorlevel 1 set "PY=py -3"
+%PY% -c "import sys" >nul 2>nul
 if errorlevel 1 (
-  echo 没有找到 python，请先安装 Python 3.8 或更高版本（安装时勾选 Add Python to PATH）
+  echo û���ҵ� Python�����Ȱ�װ Python 3.8 ����߰汾����װʱ��ѡ Add Python to PATH��
   pause
-  exit /b
+  exit /b 1
 )
-echo 正在打开 Chrome 窗口，请在窗口里登录 SRGI（只需登录一次）
+
+echo ���ڴ� Chrome ���ڣ����ڴ������¼ SRGI��ֻ���¼һ�Σ�
 echo.
-python srgi_login.py
+%PY% srgi_login.py
 echo.
 pause

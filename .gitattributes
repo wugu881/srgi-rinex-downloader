@@ -1,6 +1,5 @@
-* text=auto eol=lf
-*.bat text eol=crlf
-*.cmd text eol=crlf
+* text=auto
+*.bat -text
+*.cmd -text
 *.py text eol=lf
 *.md text eol=lf
-*.json text eol=lf
