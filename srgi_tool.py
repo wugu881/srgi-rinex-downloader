@@ -263,6 +263,8 @@ def main():
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--retry", help="读取上次 report.csv，只补缺失")
     ap.add_argument("--check-only", action="store_true")
+    ap.add_argument("--no-check", action="store_true",
+                    help="跳过可用性检查，直接按 --doy 请求下载（更快，报告里不区分“服务器没有”和“未下载”）")
     args = ap.parse_args()
 
     if args.cmd == "login":
@@ -303,44 +305,55 @@ def main():
     doy_all = parse_range(args.doy)
     log(f"stations: {len(codes)} ({codes[0]}..{codes[-1]}), year {args.year}, doys {len(doy_all)} ({min(doy_all)}-{max(doy_all)})")
 
-    # 1) availability（以“本次关心的日期集合”为准）
+    # 1) 选日期集合：默认先查服务器可用性；--no-check 则直接按 --doy 全量请求
     avail = {}
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    targets = {c: (set(plan[c]) if plan and c in plan else doy_all) for c in codes}
-
-    def check_one(code):
-        try:
-            a = Api(args.cookies)
-            return code, a.available_days(code, year_tag, targets[code])
-        except Exception:
-            return code, None
-
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        futs = {ex.submit(check_one, c): c for c in codes}
-        done = 0
-        for fut in as_completed(futs):
-            code, a = fut.result()
-            avail[code] = a
-            done += 1
-            if done % 5 == 0:
-                log(f"  检查可用性 {done}/{len(codes)}")
-
-    need = {}
+    got_cache = {}
     for code in codes:
-        a = avail.get(code)
-        if a is None:
-            continue
-        got = set()
         p = os.path.join(by, f"{code}.zip")
         if os.path.exists(p):
             try:
-                got = set(days_in_zip(p).get(code, set()))
+                got_cache[code] = set(days_in_zip(p).get(code, set()))
             except Exception:
-                got = set()
-        miss = a - got
-        if miss:
-            need[code] = sorted(miss)
-    log(f"  可用性检查完成: 需要补 {len(need)} 个站, {sum(len(v) for v in need.values())} 站-天")
+                got_cache[code] = set()
+
+    if args.no_check:
+        need = {}
+        for code in codes:
+            want = set(plan[code]) if plan and code in plan else doy_all
+            miss = want - got_cache.get(code, set())
+            if miss:
+                need[code] = sorted(miss)
+        log(f"  --no-check: 跳过可用性检查，直接请求 {len(need)} 个站, {sum(len(v) for v in need.values())} 站-天")
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        targets = {c: (set(plan[c]) if plan and c in plan else doy_all) for c in codes}
+
+        def check_one(code):
+            try:
+                a = Api(args.cookies)
+                return code, a.available_days(code, year_tag, targets[code])
+            except Exception:
+                return code, None
+
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            futs = {ex.submit(check_one, c): c for c in codes}
+            done = 0
+            for fut in as_completed(futs):
+                code, a = fut.result()
+                avail[code] = a
+                done += 1
+                if done % 5 == 0:
+                    log(f"  检查可用性 {done}/{len(codes)}")
+
+        need = {}
+        for code in codes:
+            a = avail.get(code)
+            if a is None:
+                continue
+            miss = a - got_cache.get(code, set())
+            if miss:
+                need[code] = sorted(miss)
+        log(f"  可用性检查完成: 需要补 {len(need)} 个站, {sum(len(v) for v in need.values())} 站-天")
 
     # 2) download
     MAX_RETRY = 3
@@ -408,9 +421,6 @@ def main():
     # 3) final report
     rows = []
     for code in codes:
-        a = avail.get(code)
-        if a is None:
-            rows.append([code, "", "", "", "", "", "查询失败"]); continue
         p = os.path.join(by, f"{code}.zip")
         got = set()
         if os.path.exists(p):
@@ -418,6 +428,22 @@ def main():
                 got = set(days_in_zip(p).get(code, set()))
             except Exception:
                 pass
+        if args.no_check:
+            want = set(plan[code]) if plan and code in plan else doy_all
+            miss = want - got
+            if not miss:
+                status = "完整"
+            elif got & want:
+                status = f"缺{len(miss)}天(未核对)"
+            else:
+                status = "无文件(未核对)"
+            rows.append([code, len(want), len(got & want), len(miss),
+                         " ".join(str(d) for d in sorted(miss)),
+                         " ".join(str(d) for d in sorted(want)), status])
+            continue
+        a = avail.get(code)
+        if a is None:
+            rows.append([code, "", "", "", "", "", "查询失败"]); continue
         missing = a - got
         status = "无数据" if not a else ("完整" if not missing else f"缺{len(missing)}天")
         rows.append([code, len(a), len(got), len(missing),

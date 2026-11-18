@@ -2,7 +2,7 @@
 
 [中文](#中文) | [English](#english)
 
-从印尼 [SRGI 门户](https://srgi.big.go.id) 批量下载 **Ina-CORS RINEX** 数据的命令行工具：给定测站范围与年积日范围，自动完成可用性查询、逐站申请、下载、校验、按站打包，并输出缺失日期报告。
+从印尼 [SRGI 门户](https://srgi.big.go.id) 批量下载 **Ina-CORS RINEX** 数据的命令行工具：给定测站页码范围与年积日范围，自动完成可用性查询、逐站申请、下载、校验、按站打包，并输出缺失日期报告。
 
 A command-line tool that batch-downloads **Ina-CORS RINEX** data from Indonesia's [SRGI portal](https://srgi.big.go.id): give it a station range and a DOY range, and it checks availability, submits one request per station, downloads and verifies the archives, and reports missing days.
 
@@ -36,9 +36,14 @@ python srgi_login.py
 # 2) 只查可用性，不下载
 python srgi_tool.py check --pages 17-24 --year 2026 --doy 212-320 --out D:\data\2026
 
-# 3) 正式下载
+# 3) 正式下载（先逐站查可用性，再下载，报告最准确）
 python srgi_tool.py run --pages 17-24 --year 2026 --doy 212-320 --out D:\data\2026
+
+# 4) 直接开始下载（跳过逐站可用性检查，最快）
+python srgi_tool.py run --no-check --pages 17-24 --year 2026 --doy 212-320 --out D:\data\2026
 ```
+
+> **方式 3 与 4 的区别**：方式 3 会先逐站查询可用性（每站约 1–2 分钟），报告能区分“服务器本来没有”和“没下到”；方式 4 不做这个查询，直接按你给的年积日请求，服务器上没有的日期会自动跳过，**下载立刻开始、速度快很多**，报告里的 `缺N天(未核对)` 需要再跑一次 `check` 才能确认原因。两种方式都支持断点续传和 `--retry`。
 
 Windows 下也可以直接双击 `login.bat` 和 `download.bat`。
 
@@ -53,6 +58,7 @@ Windows 下也可以直接双击 `login.bat` 和 `download.bat`。
 | `--out DIR` | 输出目录 |
 | `--workers 2` | 并发下载站数，默认 2 |
 | `--purpose "only for research"` | 申请时填写的用途 |
+| `--no-check` | 跳过逐站可用性检查，直接开始下载（最快） |
 | `--retry report.csv` | 只补上次报告里缺的站和天 |
 
 另开窗口看实时进度：
@@ -112,9 +118,19 @@ python srgi_login.py
 # 2) check availability only (no download)
 python srgi_tool.py check --pages 17-24 --year 2026 --doy 212-320 --out D:\data\2026
 
-# 3) download
+# 3) download (checks availability per station first — most accurate report)
 python srgi_tool.py run --pages 17-24 --year 2026 --doy 212-320 --out D:\data\2026
+
+# 4) start downloading immediately (skips the per-station availability check)
+python srgi_tool.py run --no-check --pages 17-24 --year 2026 --doy 212-320 --out D:\data\2026
 ```
+
+> **Mode 3 vs 4**: mode 3 queries each station's availability first (1–2 minutes per
+> station) so the report can tell "no data on the server" apart from "not downloaded".
+> Mode 4 skips that query and requests the DOY range directly — the server silently
+> skips dates it does not have, so **downloading starts immediately and is much faster**;
+> rows marked `缺N天(未核对)` can be confirmed later with `check`. Both modes are
+> resumable and both support `--retry`.
 
 On Windows you can also double-click `login.bat` and `download.bat`.
 
@@ -131,6 +147,7 @@ python srgi_tool.py <check|run> [options]
   --workers 2              parallel station downloads (default 2)
   --purpose "..."          purpose recorded with each request
   --cookies session.json   session file (default next to the script)
+  --no-check               skip the availability check and start downloading at once
   --retry report.csv       re-fetch only what is missing
 ```
 
