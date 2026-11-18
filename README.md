@@ -30,6 +30,9 @@ Windows（已测试）、Python 3.8+、Google Chrome（仅用于登录）
 ### 快速开始
 
 ```powershell
+# 0) 不确定测站先后顺序？先看顺序表（会生成 stations_order.csv）
+python srgi_tool.py stations --out D:\data\2026
+
 # 1) 首次登录：会打开专用 Chrome 窗口，登录一次即可，会话保存在 session.json
 python srgi_login.py
 
@@ -44,6 +47,30 @@ python srgi_tool.py run --no-check --pages 17-24 --year 2026 --doy 212-320 --out
 ```
 
 > **方式 3 与 4 的区别**：方式 3 会先逐站查询可用性（每站约 1–2 分钟），报告能区分“服务器本来没有”和“没下到”；方式 4 不做这个查询，直接按你给的年积日请求，服务器上没有的日期会自动跳过，**下载立刻开始、速度快很多**，报告里的 `缺N天(未核对)` 需要再跑一次 `check` 才能确认原因。两种方式都支持断点续传和 `--retry`。
+
+### 测站顺序表
+
+页码和站号是**按站点列表顺序**算的（每页 20 个）。不确定谁在前，先跑：
+
+```powershell
+python srgi_tool.py stations --out D:\data\2026
+```
+
+会打印每页的首尾站号，并生成 `stations_order.csv`（序号、页码、站号），照着填就不会输反。
+
+### 输入校验
+
+| 情况 | 行为 |
+|---|---|
+| 范围写成倒序（`24-17`、`320-212`、`csbl-crjs`） | **自动按正序处理**，并提示“已自动按 17-24 处理” |
+| 页码超出（如 `1-99`，总共 24 页） | 报错：应在 1-24 之间 |
+| 站号不存在（如 `crjs-zzzz`） | 报错：没有找到测站 zzzz |
+| 年份不是 4 位或超出 2000-2027 | 报错并说明 |
+| 年积日超出 001-366 | 报错：错误值列表 |
+| 什么都没填/没给 `--pages` 或 `--stations` | 报错并提示正确写法 |
+| 没登录 / 会话过期 | 提示先运行 `srgi_login.py` |
+
+双击 `download.bat` 时，页码/站号/年份/年积日的**格式错误会当场提示并让你重新输入**，不会带着错误参数往下跑。
 
 Windows 下也可以直接双击 `login.bat` 和 `download.bat`。
 
@@ -112,6 +139,9 @@ Windows (tested), Python 3.8+, Google Chrome (only for the one-time login).
 ### Quick start
 
 ```powershell
+# 0) not sure about station order? print/generate the order table first
+python srgi_tool.py stations --out D:\data\2026
+
 # 1) one-time login: a dedicated Chrome window opens, log in to SRGI
 python srgi_login.py
 
@@ -131,6 +161,26 @@ python srgi_tool.py run --no-check --pages 17-24 --year 2026 --doy 212-320 --out
 > skips dates it does not have, so **downloading starts immediately and is much faster**;
 > rows marked `缺N天(未核对)` can be confirmed later with `check`. Both modes are
 > resumable and both support `--retry`.
+
+### Station order
+
+Page numbers and station ranges follow the portal's station list order (20 per page).
+If you are not sure which code comes first, run:
+
+```powershell
+python srgi_tool.py stations --out D:\data\2026
+```
+
+It prints the first/last station of every page and writes `stations_order.csv`
+(order, page, station).
+
+### Input validation
+
+Reversed ranges (`24-17`, `320-212`, `csbl-crjs`) are **swapped automatically**
+with a notice; out-of-range pages, unknown station codes, a non-4-digit year,
+DOYs outside 001–366 and a missing selector are rejected with a clear message.
+The `download.bat` launcher validates the format of each answer and re-prompts
+immediately instead of running with bad arguments.
 
 On Windows you can also double-click `login.bat` and `download.bat`.
 

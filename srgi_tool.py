@@ -196,18 +196,69 @@ def parse_range(spec):
     return out
 
 
+class InputError(Exception):
+    pass
+
+
+def parse_span(spec, label, minimum, maximum):
+    """解析 "起-止" 或单个数字，倒序自动纠正，越界报错"""
+    s = str(spec).strip().replace("—", "-").replace("，", "-").replace(",", "-")
+    if not s:
+        raise InputError(f"{label}不能为空")
+    parts = s.split("-")
+    if len(parts) > 2:
+        raise InputError(f"{label}格式不对：应为“起-止”，例如 17-24，你输入的是 {spec}")
+    try:
+        a = int(parts[0].strip())
+        b = int(parts[1].strip()) if len(parts) > 1 else a
+    except ValueError:
+        raise InputError(f"{label}格式不对：只能填数字，例如 17-24，你输入的是 {spec}")
+    if a > b:
+        print(f"提示：{label} 你输入的是 {a}-{b}（倒序），已自动按 {b}-{a} 处理")
+        a, b = b, a
+    if a < minimum or b > maximum:
+        raise InputError(f"{label}超出范围：应在 {minimum}-{maximum} 之间，你输入的是 {spec}")
+    return a, b
+
+
+def parse_doy_spec(spec):
+    out = set()
+    for part in re.split(r"[,;\s]+", str(spec).strip()):
+        if not part:
+            continue
+        if "-" in part:
+            a, b = (int(x) for x in part.split("-", 1))
+            if a > b:
+                print(f"提示：年积日 {a}-{b} 是倒序，已自动按 {b}-{a} 处理")
+                a, b = b, a
+            out.update(range(a, b + 1))
+        else:
+            out.add(int(part))
+    return out
+
+
 def parse_station_range(all_codes, spec):
-    if "-" in spec:
-        a, b = spec.split("-", 1)
+    s = str(spec).strip()
+    if "-" in s:
+        a, b = [x.strip() for x in s.split("-", 1)]
+        for code in (a, b):
+            if code not in all_codes:
+                raise InputError(f"没有找到测站 “{code}”，请检查站号（4 位，例如 crjs / csbl）")
         i, j = all_codes.index(a), all_codes.index(b)
         if i > j:
+            print(f"提示：站号范围 {a}-{b} 是倒序，已自动按 {b}-{a} 处理")
             i, j = j, i
         return all_codes[i:j + 1]
-    return [c.strip() for c in spec.split(",") if c.strip()]
+    codes = [c.strip() for c in re.split(r"[,;\s]+", s) if c.strip()]
+    bad = [c for c in codes if c not in all_codes]
+    if bad:
+        raise InputError(f"没有找到这些测站：{', '.join(bad)}（站号是 4 位，例如 crjs）")
+    return codes
 
 
 def pages_to_codes(all_codes, spec, per_page=20):
-    lo, hi = (int(x) for x in spec.split("-"))
+    total_pages = (len(all_codes) + per_page - 1) // per_page
+    lo, hi = parse_span(spec, "页码范围", 1, total_pages)
     return all_codes[(lo - 1) * per_page: hi * per_page]
 
 
@@ -250,9 +301,9 @@ def days_in_zip(path):
         return doys
 
 
-def main():
+def run():
     ap = argparse.ArgumentParser(description="SRGI Ina-CORS RINEX 批量下载")
-    ap.add_argument("cmd", choices=["check", "run", "login"])
+    ap.add_argument("cmd", choices=["check", "run", "login", "stations"])
     ap.add_argument("--stations", help="站号范围，如 crjs-csbl 或 crjs,crjt")
     ap.add_argument("--pages", help="页码范围（每页20站），如 17-24")
     ap.add_argument("--year", type=int, default=time.localtime().tm_year)
@@ -288,6 +339,24 @@ def main():
         return
     api = Api(args.cookies)
     all_codes = api.stations()
+
+    if args.cmd == "stations":
+        per = 20
+        rp = os.path.join(out, "stations_order.csv")
+        with open(rp, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.writer(f)
+            w.writerow(["order", "page", "station"])
+            for i, c in enumerate(all_codes, 1):
+                w.writerow([i, (i - 1) // per + 1, c])
+        print(f"{'页码':>4}  {'序号':<12} 测站范围（首 .. 尾）")
+        print("-" * 46)
+        for p in range(0, len(all_codes), per):
+            chunk = all_codes[p:p + per]
+            print(f"{p // per + 1:>4}  {p + 1}-{p + len(chunk):<8} {chunk[0]} .. {chunk[-1]}")
+        print("-" * 46)
+        print(f"共 {len(all_codes)} 个测站 / {(len(all_codes) + per - 1) // per} 页")
+        print(f"完整顺序表: {rp}")
+        return
     if args.retry:
         rows_in = list(csv.DictReader(open(args.retry, encoding="utf-8-sig")))
         codes = [r["station"] for r in rows_in if r.get("station")]
@@ -298,11 +367,27 @@ def main():
         if not codes:
             log("报告里没有测站，退出"); return
     else:
-        codes = pages_to_codes(all_codes, args.pages) if args.pages else parse_station_range(all_codes, args.stations)
+        if args.pages:
+            codes = pages_to_codes(all_codes, args.pages)
+        elif args.stations:
+            codes = parse_station_range(all_codes, args.stations)
+        else:
+            raise InputError("请用 --pages（页码，如 17-24）或 --stations（站号范围，如 crjs-csbl）指定测站")
         plan = {}
 
     year_tag = str(args.year)[-2:]
-    doy_all = parse_range(args.doy)
+    max_year = time.localtime().tm_year + 1
+    if not (2000 <= args.year <= max_year):
+        raise InputError(f"年份不合法：应在 2000-{max_year} 之间，例如 2026（你输入的是 {args.year}）")
+    try:
+        doy_all = parse_doy_spec(args.doy)
+    except ValueError:
+        raise InputError(f"年积日格式不对：应为 001-366，例如 212-320（你输入的是 {args.doy}）")
+    if not doy_all:
+        raise InputError("年积日不能为空")
+    bad_doys = sorted(d for d in doy_all if d < 1 or d > 366)
+    if bad_doys:
+        raise InputError(f"年积日超出范围：应在 001-366 之间，错误值 {bad_doys[:5]}")
     log(f"stations: {len(codes)} ({codes[0]}..{codes[-1]}), year {args.year}, doys {len(doy_all)} ({min(doy_all)}-{max(doy_all)})")
 
     # 1) 选日期集合：默认先查服务器可用性；--no-check 则直接按 --doy 全量请求
@@ -516,5 +601,15 @@ def do_station(api, code, doys, year_tag, year, by, tmp, purpose, log):
     return True
 
 
+def main():
+    try:
+        return run()
+    except InputError as e:
+        print("")
+        print("输入有误：" + str(e))
+        print("")
+        return 2
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
